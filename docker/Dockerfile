@@ -62,6 +62,13 @@ RUN cd ${OF_ROOT}/scripts/emscripten && ./download_libs.sh
 COPY --chown=builder:builder scripts/em_shims.c /opt/em_shims.c
 COPY --chown=builder:builder scripts/coi-serviceworker.js /opt/coi-serviceworker.js
 
+# --- Performance profile: static link, fixed memory, strip debug/sourcemap -----
+# Turns oF's default compatibility build into a fast, ~5x smaller one. Must run
+# before warming the core so the warmup link uses the same flags.
+COPY --chown=builder:builder scripts/perf-config.patch.sh /opt/perf-config.patch.sh
+RUN bash /opt/perf-config.patch.sh \
+      "${OF_ROOT}/libs/openFrameworksCompiled/project/emscripten/config.emscripten.default.mk"
+
 # --- Prebuild the oF core + allowlisted addons for WASM ---------------------
 # Uses oF's own emptyExample (brings a valid Makefile/config.make), sets its
 # addons.make to the allowlist, and links once. This warms:
@@ -75,7 +82,7 @@ RUN set -eux; \
     printf '%s\n' ${ADDON_ALLOWLIST} > addons.make; \
     mkdir -p bin/data && : > bin/data/.keep; \
     cp /opt/em_shims.c src/em_shims.c; \
-    emmake make -j"$(nproc)" PLATFORM_OS=emscripten; \
+    emmake make -j"$(nproc)" PLATFORM_OS=emscripten PROJECT_EMSCRIPTEN_TOTAL_MEMORY=268435456; \
     ls -la bin/em/_warmup/index.wasm
 
 # --- Per-run entrypoint (copied last so edits don't bust the heavy layers) ---

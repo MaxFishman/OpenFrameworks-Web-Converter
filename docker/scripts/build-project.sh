@@ -19,6 +19,7 @@ OUTPUT_DIR="${OUTPUT_DIR:-/work/output}"
 PROJECT_NAME="${PROJECT_NAME:-studentapp}"           # deterministic on-disk name
 ADDON_ALLOWLIST="${ADDON_ALLOWLIST:-ofxGui ofxEmscripten}"
 GHPAGES="${GHPAGES:-1}"                               # 1 = make output GitHub-Pages ready
+TOTAL_MEMORY="${TOTAL_MEMORY:-268435456}"            # fixed wasm memory (growth is off for speed)
 JOBS="$(nproc)"
 
 # emsdk is on PATH via the base image; source defensively in case of overrides.
@@ -101,7 +102,7 @@ cp -f /opt/em_shims.c "$DEST/src/em_shims.c"
 # --- 5. Build for WASM (emmake + lowercase emscripten = gotchas #1 and #2) ---
 say "compiling for emscripten ..."
 cd "$DEST"
-if ! emmake make -j"$JOBS" PLATFORM_OS=emscripten; then
+if ! emmake make -j"$JOBS" PLATFORM_OS=emscripten PROJECT_EMSCRIPTEN_TOTAL_MEMORY="$TOTAL_MEMORY"; then
   fail "compilation failed — see the log above" 1
 fi
 

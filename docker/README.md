@@ -88,9 +88,15 @@ The build is pthread-enabled, so the page only instantiates under
 
 Embed with the snippet in `EMBED.html` either way.
 
-> **Do not strip `index.wasm.map`.** oF links with `-sLOAD_SOURCE_MAP=1`, so the
-> runtime fetches and JSON-parses the map at startup — a missing map 404s and
-> aborts the app at "Preparing…". The worker keeps it; don't prune it downstream.
+## Performance profile
+
+The image patches oF's Emscripten config (`scripts/perf-config.patch.sh`) into a
+fast, small build: static linking (not dynamic `MAIN_MODULE`), fixed memory (no
+`ALLOW_MEMORY_GROWTH` — which is slow with pthreads), and no debug/profiling/
+source-map flags. Result: ~5.4 MB total (vs ~27 MB default) and native-like frame
+rate. That last part matters — many oF sketches advance physics per frame with no
+delta-time, so a low frame rate makes the motion itself run slow/wrong. No
+`index.wasm.map` is produced, so there's nothing extra to ship.
 
 ## Security — this compiles untrusted C++
 

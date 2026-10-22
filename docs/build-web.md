@@ -37,25 +37,48 @@ emmake make -j$(nproc) PLATFORM_OS=emscripten
 
 Output lands in `bin/em/<project>/`:
 `index.html  index.js  index.wasm  index.data  app.js  style.css`
-(~26 MB total for this sketch; `.wasm.map` is debug-only, drop it for hosting.)
+(With the default oF flags this is ~26 MB and a `.wasm.map` is emitted that the
+runtime fetches at startup — see the performance profile below, which the build
+worker applies to cut it to ~5.4 MB and emit no map.)
 
 ## Serving / embedding
 
-The build is pthread-enabled, so the page **requires cross-origin isolation headers**:
+The build is pthread-enabled, so the page needs **cross-origin isolation**
+(`COOP`/`COEP`). Two cases:
 
-```
-Cross-Origin-Opener-Policy: same-origin
-Cross-Origin-Embedder-Policy: require-corp
-```
+- **A host you control** — set the headers directly:
+  ```
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+  ```
+  (nginx `add_header`, S3+CloudFront, a Netlify `_headers`, a Cloudflare rule…).
+- **GitHub Pages** (can't set headers) — ship
+  [`coi-serviceworker.js`](https://github.com/gzuidhof/coi-serviceworker) and
+  inject it as the first `<head>` script; it supplies isolation client-side. The
+  first visit registers it and auto-reloads once. Add a `.nojekyll` file too.
+  The build worker does all of this automatically (`GHPAGES=1`).
 
-Without them the WASM won't instantiate. Set these on your static host (or a
-Netlify `_headers` / Cloudflare rule). Embed with:
+Embed with:
 
 ```html
 <iframe src="https://host/path/to/index.html"
         width="1024" height="768" style="border:0"
         allow="fullscreen"></iframe>
 ```
+
+## Performance profile (strongly recommended)
+
+oF's default Emscripten config optimizes for compatibility, not speed. For a
+trivial sketch the result is still noticeably sluggish — and because many sketches
+advance physics per frame with **no delta-time**, a low frame rate makes the
+motion itself run slow/wrong vs native. The build worker patches the config
+(`docker/scripts/perf-config.patch.sh`) to:
+
+- **static link** (`MAIN_MODULE=0`, not dynamic) → cross-module inlining; `index.js` 12 MB → ~190 KB
+- **no `ALLOW_MEMORY_GROWTH`** (fixed `TOTAL_MEMORY`) → avoids the slow-memory penalty that pthreads + growable memory impose on *every* access
+- **drop** `--profiling-funcs`, `GL_ASSERTIONS`, `VERBOSE`, `LOAD_SOURCE_MAP`/`-gsource-map`, `EMBIND_AOT`
+
+Net: ~5.4 MB total (from ~27 MB), native-like frame rate, and no `index.wasm.map`.
 
 ## Gotchas discovered (each one is a pipeline guard you need)
 
