@@ -1,0 +1,4 @@
+out/
+*.md
+.git/
+.DS_Store
